@@ -118,8 +118,6 @@ kubectl apply -f config/httpbin-igw-vs.yaml
 
     ```
     export LB_IP=$(kubectl get svc istio-ingressgateway -n istio-system -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-    curl --cacert ._temp_client_certs/rootCA.crt --cert ._temp_client_certs/client.testing.svc.cluster.local.crt --key ._temp_client_certs/client.httpbin.svc.cluster.local.key --resolve client.testing.termination.internal:10443:$LB_IP https://client.testing.termination.internal:10443/headers
-
     curl -kv --cacert ._temp_client_certs/rootCA.crt --cert ._temp_client_certs/client.testing.termination.internal.crt --key ._temp_client_certs/client.testing.termination.internal.key --resolve client.testing.termination.internal:10443:$LB_IP https://client.testing.termination.internal:10443/headers
     ```
     
@@ -134,4 +132,22 @@ kubectl apply -f config/httpbin-igw-vs.yaml
         "X-Forwarded-Client-Cert": "Hash=2552f339fd26dd40d6979af021927c8fdb4fdfa48c991b1d705818433fc40a21;Subject=\"CN=client.testing.termination.internal,OU=Field Engineering,O=Solo.io,L=Boston,ST=New York,C=US\";URI=;DNS=client.testing.termination.internal"
       }
     }
+    ```
+
+5. Authorization policy to deny requests based on the authority header
+
+    Apply the envoy filter with the authZ policy
+    ```
+    kubectl apply -f config/httpbin-envoy-filter-with-auth-policy.yaml
+    ```
+
+    Test with,
+    ```
+    export LB_IP=$(kubectl get svc istio-ingressgateway -n istio-system -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+    curl -kv --cacert ._temp_client_certs/rootCA.crt --cert ._temp_client_certs/client.testing.termination.internal.crt --key ._temp_client_certs/client.testing.termination.internal.key --resolve client.testing.termination.internal:10443:$LB_IP https://client.testing.termination.internal:10443/headers
+    ```
+
+    Results in,
+    ```
+    RBAC: access denied
     ```

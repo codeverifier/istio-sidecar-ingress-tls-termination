@@ -103,9 +103,6 @@ spec:
                         port_value: 80
 
     # Dependent on 1.17.x right now as it introduces `LISTENER_FILTER`
-    # Note: This is required since the PeerAuthentication disables mTLS on port 9080 which also
-    # means it disables tls inspection for 9080. Hence this listener filter removes 9080 from the port range and only adds
-    # 15006.
     - applyTo: LISTENER_FILTER
       match:
         context: SIDECAR_INBOUND
@@ -176,6 +173,32 @@ spec:
                               inline_string: envoy.wasm.metadata_exchange
                         configuration:
                           "@type": type.googleapis.com/envoy.tcp.metadataexchange.config.MetadataExchange
+
+                  # ----------------------------------------------------------------------------------------------------
+                  # Auth policy for checking authority header
+                  - name: envoy.filters.http.rbac
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBAC
+                      shadow_rules_stat_prefix: istio_dry_run_allow_
+                      rules:
+                        action: DENY
+                        policies:
+                          ns[httpbin]-policy[ingress-httpbin-allow]-rule[0]:
+                            permissions:
+                              - and_rules:
+                                  rules:
+                                    - or_rules:
+                                        rules:
+                                          - header:
+                                              name: :authority
+                                              string_match:
+                                                exact: "client.testing.termination.internal:10443"
+                                                ignore_case: true
+                            principals:
+                              - and_ids:
+                                  ids:
+                                    - any: true
+                  # ----------------------------------------------------------------------------------------------------
 
                   - name: envoy.filters.http.fault
                     typed_config:
