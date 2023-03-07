@@ -1,0 +1,38 @@
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: custom-igw-gateway
+  namespace: istio-config
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - hosts:
+        - "*"
+      port:
+        name: tls-passthrough
+        number: 10443
+        protocol: TLS
+      tls:
+        mode: PASSTHROUGH
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: httpbin-igw-vs
+  namespace: istio-config
+spec:
+  gateways:
+    - custom-igw-gateway
+  hosts:
+    - "client.testing.termination.internal"
+  tls:
+    - match:
+        - port: 10443
+          sniHosts:
+            - "client.testing.termination.internal"
+      route:
+        - destination:
+            host: httpbin.httpbin.svc.cluster.local
+            port:
+              number: 8443

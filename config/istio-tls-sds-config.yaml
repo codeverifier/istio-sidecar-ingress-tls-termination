@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: istio-tls-sds
+data:
+  tls_certificate_sds_secret.yaml: |-
+    resources:
+      - "@type": "type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.Secret"
+        name: default
+        tls_certificate:
+          certificate_chain:
+            filename: /etc/istio/tls-certs/tls.crt
+          private_key:
+            filename: /etc/istio/tls-certs/tls.key
+  validation_context_sds_secret.yaml: |-
+    resources:
+      - "@type": "type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.Secret"
+        name: validation_context_sds
+        validation_context:
+          trusted_ca:
+            filename: /etc/istio/tls-ca-certs/ca.crt

@@ -1,0 +1,271 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: envoy-filter-inbound-tls
+  namespace: istio-system
+spec:
+  workloadSelector:
+    labels:
+      app: httpbin
+      version: v1
+  configPatches:
+    # Remove existing filter chain and clusters since we cant easily patch them
+    - applyTo: FILTER_CHAIN
+      match:
+        context: SIDECAR_INBOUND
+        listener:
+          portNumber: 9080
+      patch:
+        operation: REMOVE
+    - applyTo: CLUSTER
+      match:
+        context: SIDECAR_INBOUND
+        cluster:
+          portNumber: 9080
+      patch:
+        operation: REMOVE
+    - applyTo: CLUSTER
+      match:
+        context: SIDECAR_INBOUND
+        cluster:
+          portNumber: 9081
+      patch:
+        operation: REMOVE
+
+    # Static clusters
+    - applyTo: CLUSTER
+      match:
+        context: SIDECAR_INBOUND
+      patch:
+        operation: ADD
+        value:
+          name: inbound|9080||
+          type: STATIC
+          connect_timeout: "10s"
+          common_lb_config: {}
+          circuit_breakers:
+            thresholds:
+              - max_connections: 4294967295
+                max_pending_requests: 4294967295
+                max_requests: 4294967295
+                max_retries: 4294967295
+                track_remaining: true
+          metadata:
+            filter_metadata:
+              istio:
+                services: []
+          upstream_bind_config:
+            source_address:
+              address: 127.0.0.6
+              port_value: 0
+          load_assignment:
+            cluster_name: inbound|9080||
+            endpoints:
+              - lb_endpoints:
+                - endpoint:
+                    address:
+                      socket_address:
+                        address: 127.0.0.1
+                        port_value: 80
+    - applyTo: CLUSTER
+      match:
+        context: SIDECAR_INBOUND
+      patch:
+        operation: ADD
+        value:
+          name: inbound|9081||
+          type: STATIC
+          connect_timeout: "10s"
+          common_lb_config: {}
+          circuit_breakers:
+            thresholds:
+              - max_connections: 4294967295
+                max_pending_requests: 4294967295
+                max_requests: 4294967295
+                max_retries: 4294967295
+                track_remaining: true
+          metadata:
+            filter_metadata:
+              istio:
+                services: []
+          upstream_bind_config:
+            source_address:
+              address: 127.0.0.6
+              port_value: 0
+          load_assignment:
+            cluster_name: inbound|9081||
+            endpoints:
+              - lb_endpoints:
+                - endpoint:
+                    address:
+                      socket_address:
+                        address: 127.0.0.1
+                        port_value: 80
+
+    # Dependent on 1.17.x right now as it introduces `LISTENER_FILTER`
+    - applyTo: LISTENER_FILTER
+      match:
+        context: SIDECAR_INBOUND
+        listener:
+          portNumber: 15006
+          listenerFilter: envoy.filters.listener.tls_inspector
+      patch:
+        operation: REPLACE
+        value:
+          name: envoy.filters.listener.tls_inspector
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.filters.listener.tls_inspector.v3.TlsInspector
+          filter_disabled:
+            destination_port_range:
+              start: 15006
+              end: 15007
+
+    # Filter chain for TLS/9080
+    - applyTo: FILTER_CHAIN
+      match:
+        context: SIDECAR_INBOUND
+        listener:
+          portNumber: 15006
+      patch:
+        operation: INSERT_FIRST
+        value:
+          name: 0.0.0.0_9080
+          filter_chain_match:
+            transport_protocol: tls
+            destination_port: 9080
+          filters:
+            - name: istio.metadata_exchange
+              typed_config:
+                "@type": type.googleapis.com/envoy.tcp.metadataexchange.config.MetadataExchange
+                protocol: istio-peer-exchange
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: inbound_0.0.0.0_9080
+                route_config:
+                  name: inbound|9080||
+                  virtual_hosts:
+                    - name: inbound|http|9080
+                      domains:
+                        - "*"
+                      routes:
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: inbound|9080||
+                            timeout: 0s
+                            max_stream_duration:
+                              max_stream_duration: 0s
+                              grpc_timeout_header_max: 0s
+                          decorator:
+                            operation: ingress-sidecar.httpbin:9080/*
+                          name: default
+                  validate_clusters: false
+                http_filters:
+                  - name: istio.metadata_exchange
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.wasm.v3.Wasm
+                      config:
+                        vm_config:
+                          runtime: envoy.wasm.runtime.null
+                          code:
+                            local:
+                              inline_string: envoy.wasm.metadata_exchange
+                        configuration:
+                          "@type": type.googleapis.com/envoy.tcp.metadataexchange.config.MetadataExchange
+
+                  - name: envoy.filters.http.fault
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.fault.v3.HTTPFault
+
+                  - name: envoy.filters.http.cors
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.Cors
+
+                  - name: istio.stats
+                    typed_config:
+                      "@type": type.googleapis.com/udpa.type.v1.TypedStruct
+                      type_url: type.googleapis.com/envoy.extensions.filters.http.wasm.v3.Wasm
+                      value:
+                        config:
+                          root_id: stats_inbound
+                          vm_config:
+                            vm_id: stats_inbound
+                            runtime: envoy.wasm.runtime.null
+                            code:
+                              local:
+                                inline_string: envoy.wasm.stats
+                          configuration:
+                            "@type": type.googleapis.com/google.protobuf.StringValue
+                            value: "{\n  \"debug\": \"false\",\n  \"stat_prefix\": \"istio\",\n  \"disable_host_header_fallback\": true\n}\n"
+
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router           
+                server_name: istio-envoy
+                use_remote_address: false
+                forward_client_cert_details: APPEND_FORWARD
+                set_current_client_cert_details:
+                  subject: true
+                  dns: true
+                  uri: true
+                upgrade_configs:
+                  - upgrade_type: websocket
+                stream_idle_timeout: 0s
+                normalize_path: true
+                request_id_extension:
+                  typed_config:
+                    "@type": type.googleapis.com/envoy.extensions.request_id.uuid.v3.UuidRequestIdConfig
+                    use_request_id_for_trace_sampling: true
+                path_with_escaped_slashes_action: KEEP_UNCHANGED
+
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              common_tls_context:
+                tls_params:
+                  tls_minimum_protocol_version: TLSv1_2
+                  tls_maximum_protocol_version: TLSv1_3
+                alpn_protocols:
+                  - h2
+                  - http/1.1
+
+                # Either of the below SDS config blocks should work and also watch for file changes
+                tls_certificate_sds_secret_configs:
+                  - name: file-cert:/etc/istio/tls-certs/tls.crt~/etc/istio/tls-certs/tls.key
+                    sds_config:
+                      api_config_source:
+                        api_type: GRPC
+                        grpc_services:
+                          - envoy_grpc:
+                              cluster_name: sds-grpc
+                        transport_api_version: V3
+                        set_node_on_first_message_only: true
+                      resource_api_version: V3
+                combined_validation_context:
+                  default_validation_context: {}
+                  validation_context_sds_secret_config:
+                    name: file-root:/etc/istio/tls-ca-certs/ca.crt
+                    sds_config:
+                      api_config_source:
+                        api_type: GRPC
+                        grpc_services:
+                          - envoy_grpc:
+                              cluster_name: sds-grpc
+                        transport_api_version: V3
+                        set_node_on_first_message_only: true
+                      resource_api_version: V3
+
+                # tls_certificate_sds_secret_configs:
+                #   - name: default
+                #     sds_config:
+                #       path: /etc/istio/tls-config/tls_certificate_sds_secret.yaml
+                # combined_validation_context:
+                #   #default_validation_context: {}
+                #   validation_context_sds_secret_config:
+                #     name: validation_context_sds
+                #     sds_config:
+                #       path: /etc/istio/tls-config/validation_context_sds_secret.yaml
+              
+              require_client_certificate: true

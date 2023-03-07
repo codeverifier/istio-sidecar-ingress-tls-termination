@@ -1,0 +1,58 @@
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  name: istio-custom-cp-configuration
+  namespace: istio-system
+spec:
+  components:
+    base:
+      enabled: true
+    cni:
+      enabled: false
+    ingressGateways:
+      - enabled: true
+        name: istio-ingressgateway
+        k8s:
+          hpaSpec:
+            minReplicas: 1
+          overlays:
+            - apiVersion: v1
+              kind: Service
+              name: istio-ingressgateway
+              patches:
+                - path: spec.ports
+                  value:
+                    - name: status-port
+                      port: 15021
+                      targetPort: 15021
+                      protocol: TCP
+                    - name: http2
+                      port: 80
+                      targetPort: 8080
+                      protocol: TCP
+                    - name: https
+                      port: 443
+                      targetPort: 8443
+                      protocol: TCP
+                    - name: tls-passthrough
+                      port: 10443
+                      targetPort: 8443
+                      protocol: TCP
+    pilot:
+      enabled: true
+      k8s:
+        hpaSpec:
+          minReplicas: 1
+  meshConfig:
+    accessLogFile: "/dev/stdout"
+    accessLogEncoding: "JSON"
+  values:
+    global:
+      istiod:
+        enableAnalysis: true
+    pilot:
+      env:
+        PILOT_ENABLE_STATUS: true
+        ENABLE_TLS_ON_SIDECAR_INGRESS: true
+    sidecarInjectorWebhook:
+      rewriteAppHTTPProbe: true
