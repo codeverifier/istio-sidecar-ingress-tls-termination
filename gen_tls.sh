@@ -2,7 +2,7 @@
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-temp_dir="$DIR/.temp_$(date +%Y%m%d_%H%M%S)"
+temp_dir="$DIR/._temp_$(date +%Y%m%d_%H%M%S)"
 mkdir -p $temp_dir
 
 generate_cert() {
@@ -79,7 +79,7 @@ kubectl -n httpbin create secret generic httpbin-mtls-termination-cacert --from-
 kubectl -n httpbin create secret tls httpbin-mtls-termination --cert $temp_dir/httpbin.httpbin.svc.cluster.local.crt --key $temp_dir/httpbin.httpbin.svc.cluster.local.key
 
 # Copy client certs
-client_temp_dir="$DIR/.temp_client_certs"
+client_temp_dir="$DIR/._temp_client_certs"
 mkdir -p "$client_temp_dir"
 cp -f $temp_dir/rootCA.* $client_temp_dir/.
 cp -f $temp_dir/client.httpbin.svc.cluster.local* $client_temp_dir/.

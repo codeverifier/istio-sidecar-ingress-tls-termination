@@ -80,9 +80,9 @@ kubectl apply -f config/httpbin-igw-vs.yaml
 
     ```
     export EXTERNAL_CLIENT=$(kubectl -n trusted get pod -l app=curl-client -o jsonpath={.items..metadata.name})
-    kubectl cp .temp_client_certs/client.httpbin.svc.cluster.local.key trusted/"${EXTERNAL_CLIENT}":/tmp/client.key
-    kubectl cp .temp_client_certs/client.httpbin.svc.cluster.local.crt trusted/"${EXTERNAL_CLIENT}":/tmp/client.crt
-    kubectl cp .temp_client_certs/rootCA.crt trusted/"${EXTERNAL_CLIENT}":/tmp/ca.crt
+    kubectl cp ._temp_client_certs/client.httpbin.svc.cluster.local.key trusted/"${EXTERNAL_CLIENT}":/tmp/client.key
+    kubectl cp ._temp_client_certs/client.httpbin.svc.cluster.local.crt trusted/"${EXTERNAL_CLIENT}":/tmp/client.crt
+    kubectl cp ._temp_client_certs/rootCA.crt trusted/"${EXTERNAL_CLIENT}":/tmp/ca.crt
 
     kubectl exec "${EXTERNAL_CLIENT}" -n trusted -c curl-client -- curl -IsS --cacert /tmp/ca.crt --key /tmp/client.key --cert /tmp/client.crt -HHost:httpbin.httbin.svc.cluster.local "https://httpbin.httpbin.svc.cluster.local:8443/status/200"
     ```
@@ -118,9 +118,9 @@ kubectl apply -f config/httpbin-igw-vs.yaml
 
     ```
     export LB_IP=$(kubectl get svc istio-ingressgateway -n istio-system -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-    curl --cacert .temp_client_certs/rootCA.crt --cert .temp_client_certs/client.testing.svc.cluster.local.crt --key .temp_client_certs/client.httpbin.svc.cluster.local.key --resolve client.testing.termination.internal:10443:$LB_IP https://client.testing.termination.internal:10443/headers
+    curl --cacert ._temp_client_certs/rootCA.crt --cert ._temp_client_certs/client.testing.svc.cluster.local.crt --key ._temp_client_certs/client.httpbin.svc.cluster.local.key --resolve client.testing.termination.internal:10443:$LB_IP https://client.testing.termination.internal:10443/headers
 
-    curl -kv --cacert .temp_client_certs/rootCA.crt --cert .temp_client_certs/client.testing.termination.internal.crt --key .temp_client_certs/client.testing.termination.internal.key --resolve client.testing.termination.internal:10443:$LB_IP https://client.testing.termination.internal:10443/headers
+    curl -kv --cacert ._temp_client_certs/rootCA.crt --cert ._temp_client_certs/client.testing.termination.internal.crt --key ._temp_client_certs/client.testing.termination.internal.key --resolve client.testing.termination.internal:10443:$LB_IP https://client.testing.termination.internal:10443/headers
     ```
     
     Which should result in,

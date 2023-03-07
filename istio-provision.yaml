@@ -53,6 +53,5 @@ spec:
     pilot:
       env:
         PILOT_ENABLE_STATUS: true
-        ENABLE_TLS_ON_SIDECAR_INGRESS: true
     sidecarInjectorWebhook:
       rewriteAppHTTPProbe: true
